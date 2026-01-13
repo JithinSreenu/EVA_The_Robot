@@ -11,6 +11,8 @@ import 'package:flutter_tts/flutter_tts.dart'; // Text-to-Speech functionality
 import 'package:vibration/vibration.dart'; // Device vibration for wrong answers
 import 'package:confetti/confetti.dart'; // Confetti animation for correct answers
 import 'package:permission_handler/permission_handler.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
+
 bool bleReady = false;
 
 
@@ -37,8 +39,10 @@ Future<void> requestBlePermissions() async {
     Permission.location,
     Permission.bluetoothScan,
     Permission.bluetoothConnect,
+    Permission.microphone, // 🎤 REQUIRED
   ].request();
 }
+
 
 
 // ============================================================================
@@ -103,7 +107,7 @@ class _EvaScreenState extends State<EvaScreen> with TickerProviderStateMixin {
   late Ticker _ticker;
   
   // Position tracking variables
-  Offset _mousePos = Offset.zero; // Target position (user touch/mouse)
+  final Offset _mousePos = Offset.zero; // Target position (user touch/mouse)
   Offset _lookPos = Offset.zero; // Current eye position
   Offset _velocity = Offset.zero; // Movement velocity for smooth physics
   
@@ -282,10 +286,16 @@ class _WelcomeScreenState extends State<WelcomeScreen> with TickerProviderStateM
   late AnimationController _uiController;
   late Animation<double> _pulseAnimation;
 
+  late stt.SpeechToText _speech;
+  bool _isListening = false;
+
+
   @override
   void initState() {
     super.initState();
     
+    _speech = stt.SpeechToText();
+
     // Create repeating pulse animation (1.5 seconds, reversing)
     _uiController = AnimationController(
       vsync: this,
@@ -300,9 +310,49 @@ class _WelcomeScreenState extends State<WelcomeScreen> with TickerProviderStateM
 
   @override
   void dispose() {
+    _speech.stop(); 
     _uiController.dispose(); // Clean up animation controller
     super.dispose();
   }
+
+    Future<void> _toggleMic() async {
+    if (!bleReady) return;
+    if (_isListening) {
+      _speech.stop();
+      setState(() => _isListening = false);
+      return;
+    }
+
+    bool available = await _speech.initialize(
+      onStatus: (status) => debugPrint('Speech status: $status'),
+      onError: (error) => debugPrint('Speech error: $error'),
+    );
+
+    if (!available) return;
+
+    setState(() => _isListening = true);
+
+    _speech.listen(
+      localeId: 'en_US', // ✅ ENGLISH ONLY
+      listenMode: stt.ListenMode.confirmation,
+      onResult: (result) {
+        String spoken = result.recognizedWords.toLowerCase();
+        debugPrint("Heard: $spoken");
+
+        if (spoken.contains('hi') || spoken.contains('hello')) {
+          bleService.sendCommand("SAY_HI");
+        }
+
+        if (spoken.contains('shake')) {
+          bleService.sendCommand("SHAKE_HAND");
+        }
+
+        _speech.stop();
+        setState(() => _isListening = false);
+      },
+    );
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -360,74 +410,112 @@ class _WelcomeScreenState extends State<WelcomeScreen> with TickerProviderStateM
                       ),
                     ),
                     
-                    const Spacer(),
+              Expanded(
+                      child: Stack(
+                        children: [
 
-                    // 🤖 ROBOT CONTROL BUTTONS
-                    RobotActionButton(
-                      icon: Icons.waving_hand,
-                      label: 'SAY HI',
-                      onTap: () {
-                        //debugPrint('SAY_HI command triggered'); // For debugging
-                        bleService.sendCommand("SAY_HI");
-                        // Future: send BLE command -> SAY_HI
-                      },
-                    ),
-
-                    RobotActionButton(
-                      icon: Icons.handshake,
-                      label: 'SHAKE HAND',
-                      onTap: () {
-                       // debugPrint('SHAKE_HAND command triggered');// For debugging
-                        bleService.sendCommand("SHAKE_HAND");
-                        // Future: send BLE command -> SHAKE_HAND
-                      },
-                    ),
-
-                    const SizedBox(height: 30),
-
-                    
-                    // Animated START button with glow effect
-                    ScaleTransition(
-                      scale: _pulseAnimation,
-                      child: GestureDetector(
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (context) => const QuizPage())
-                        ),
-                        child: Container(
-                          width: screenSize.width * 0.8,
-                          height: 65,
-                          decoration: BoxDecoration(
-                            // Gradient button background
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFF00B4DB), Color(0xFF00D2FF)]
-                            ),
-                            borderRadius: BorderRadius.circular(40),
-                            // Glowing shadow effect
-                            boxShadow: [
-                              BoxShadow(
-                                color: const Color(0xFF00D2FF).withOpacity(0.6),
-                                blurRadius: 30,
-                                spreadRadius: 5
-                              )
-                            ],
-                          ),
-                          child: const Center(
-                            child: Text(
-                              'START QUIZ',
-                              style: TextStyle(
-                                fontSize: 22,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF00334E),
-                                letterSpacing: 2
-                              )
+                          // 🎯 EXACT CENTER — START QUIZ
+                          Align(
+                            alignment: Alignment.center,
+                            child: ScaleTransition(
+                              scale: _pulseAnimation,
+                              child: GestureDetector(
+                                onTap: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(builder: (context) => const QuizPage()),
+                                ),
+                                child: Container(
+                                  width: screenSize.width * 0.65,
+                                  height: 65,
+                                  decoration: BoxDecoration(
+                                    gradient: const LinearGradient(
+                                      colors: [Color(0xFF00B4DB), Color(0xFF00D2FF)],
+                                    ),
+                                    borderRadius: BorderRadius.circular(40),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: const Color(0xFF00D2FF).withOpacity(0.6),
+                                        blurRadius: 30,
+                                        spreadRadius: 5,
+                                      ),
+                                    ],
+                                  ),
+                                  child: const Center(
+                                    child: Text(
+                                      'START QUIZ',
+                                      style: TextStyle(
+                                        fontSize: 22,
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFF00334E),
+                                        letterSpacing: 2,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
-                        ),
+
+                          // 🟩 BOTTOM LEFT — SAY HI
+                          Positioned(
+                            left: 32,
+                            bottom: 32,
+                            child: RobotActionButton(
+                              icon: Icons.waving_hand,
+                              label: 'SAY HI',
+                              onTap: () {
+                                bleService.sendCommand("SAY_HI");
+                              },
+                            ),
+                          ),
+
+                          // 🎤 BOTTOM CENTER — MIC TOGGLE
+                          Positioned(
+                            bottom: 32,
+                            left: 0,
+                            right: 0,
+                            child: Center(
+                              child: GestureDetector(
+                                onTap: _toggleMic,
+                                child: Container(
+                                  width: 70,
+                                  height: 70,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: _isListening ? Colors.redAccent : Colors.cyanAccent,
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.cyanAccent.withOpacity(0.6),
+                                        blurRadius: 20,
+                                        spreadRadius: 3,
+                                      ),
+                                    ],
+                                  ),
+                                  child: Icon(
+                                    _isListening ? Icons.mic_off : Icons.mic,
+                                    size: 34,
+                                    color: Colors.black,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+
+                          // 🟨 BOTTOM RIGHT — SHAKE HAND
+                          Positioned(
+                            right: 32,
+                            bottom: 32,
+                            child: RobotActionButton(
+                              icon: Icons.handshake,
+                              label: 'SHAKE HAND',
+                              onTap: () {
+                                bleService.sendCommand("SHAKE_HAND");
+                              },
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    
-                    const SizedBox(height: 120),
                   ],
                 ),
               ),
@@ -948,4 +1036,3 @@ class EvaEyePainter extends CustomPainter {
   bool shouldRepaint(oldDelegate) => true; // Always repaint for smooth animation
 }
 
-     

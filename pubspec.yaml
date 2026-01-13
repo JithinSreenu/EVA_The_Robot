@@ -36,6 +36,11 @@ dependencies:
   google_fonts: ^6.2.1 # For custom fonts
   flutter_blue_plus: ^1.35.0 # for Bluetooth connectivity
   permission_handler: ^11.3.1
+  speech_to_text: ^7.3.0
+
+
+
+
 
 
   # The following adds the Cupertino Icons font to your application.
