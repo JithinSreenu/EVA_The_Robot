@@ -3,7 +3,6 @@
 // ============================================================================
 import 'ble_service.dart'; // BLE communication service
 import 'dart:async'; // For Timer and async operations
-import 'dart:math' as math; // Mathematical operations
 import 'dart:math' show Random; // Random number generation for blink effects
 import 'package:flutter/material.dart'; // Core Flutter widgets
 import 'package:flutter/services.dart'; // System UI controls (fullscreen mode)
@@ -12,9 +11,12 @@ import 'package:flutter_tts/flutter_tts.dart'; // Text-to-Speech functionality
 import 'package:vibration/vibration.dart'; // Device vibration for wrong answers
 import 'package:confetti/confetti.dart'; // Confetti animation for correct answers
 import 'package:permission_handler/permission_handler.dart';
+bool bleReady = false;
 
 
-final BleService bleService = BleService();
+//final BleService bleService = BleService(); need a replacement
+final BleService bleService = BleService.instance;
+
 
 // ============================================================================
 // MAIN APPLICATION ENTRY POINT
@@ -111,14 +113,44 @@ class _EvaScreenState extends State<EvaScreen> with TickerProviderStateMixin {
   double _glitch = 0; // Glitch effect intensity
   bool _booted = false; // Boot animation completed flag
 
-   
+
         @override
+        void initState() {
+          super.initState();
+
+          // 1️⃣ Request permissions
+          requestBlePermissions().then((_) async {
+            await bleService.connect();
+          });
+
+          // 2️⃣ LISTEN for BLE READY signal
+          bleService.readyStream.listen((ready) {
+            if (!mounted) return;
+            setState(() {
+              bleReady = ready;
+            });
+          });
+
+          // 3️⃣ Start eye animation
+          _ticker = createTicker(_onTick)..start();
+
+          Future.delayed(const Duration(milliseconds: 800), () {
+            if (!mounted) return;
+            setState(() {
+              _booted = true;
+              _triggerBlink();
+            });
+          });
+        }
+
+   
+       /* @override
     void initState() {
       super.initState();
 
-      requestBlePermissions().then((_) {
+     /* requestBlePermissions().then((_) {
         bleService.connect();
-      });
+      });*/
 
       _ticker = createTicker(_onTick)..start();
 
@@ -145,7 +177,7 @@ class _EvaScreenState extends State<EvaScreen> with TickerProviderStateMixin {
         });
       }
     });
-  }*/
+  }*/ */
 
   /// Physics simulation for eye movement (called every frame)
   /// Uses spring physics for natural, smooth eye tracking
@@ -915,3 +947,5 @@ class EvaEyePainter extends CustomPainter {
   @override
   bool shouldRepaint(oldDelegate) => true; // Always repaint for smooth animation
 }
+
+     
