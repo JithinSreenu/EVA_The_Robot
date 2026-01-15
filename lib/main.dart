@@ -147,42 +147,6 @@ class _EvaScreenState extends State<EvaScreen> with TickerProviderStateMixin {
           });
         }
 
-   
-       /* @override
-    void initState() {
-      super.initState();
-
-     /* requestBlePermissions().then((_) {
-        bleService.connect();
-      });*/
-
-      _ticker = createTicker(_onTick)..start();
-
-      Future.delayed(const Duration(milliseconds: 800), () {
-        if (!mounted) return;
-        setState(() {
-          _booted = true;
-          _triggerBlink();
-        });
-      });
-    }
-
-
-    
-  /*  // Start physics ticker for smooth eye movement
-    _ticker = createTicker(_onTick)..start();
-    
-    // Trigger boot animation after 800ms
-    Future.delayed(const Duration(milliseconds: 800), () {
-      if (mounted) {
-        setState(() {
-          _booted = true; // Show eyes with fade-in
-          _triggerBlink(); // Initial blink
-        });
-      }
-    });
-  }*/ */
-
   /// Physics simulation for eye movement (called every frame)
   /// Uses spring physics for natural, smooth eye tracking
   void _onTick(Duration elapsed) {
